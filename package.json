@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "node src/index"
+  },
   "dependencies": {
     "@qiwi/bill-payments-node-js-sdk": "^3.2.1",
     "adm-zip": "^0.5.9",
@@ -16,7 +19,7 @@
     "nominatim-geocoder": "^0.1.4",
     "pg": "^8.8.0",
     "telegraf": "^4.7.0",
-    "telegraf-steps-engine": "file:src",
+    "telegraf-steps": "^1.0.15",
     "typeorm": "^0.3.6",
     "typeorm-naming-strategies": "^4.1.0"
   },

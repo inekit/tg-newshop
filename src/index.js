@@ -32,12 +32,12 @@ console.log("started");
     const tlsOptions = {
       key: fs.readFileSync("/etc/ssl/certs/rootCA.key"),
       cert: fs.readFileSync("/etc/ssl/certs/rootCA.crt"),
-      ca: [fs.readFileSync("/etc/ssl/certs/rootCA.crt")],
+      //ca: [fs.readFileSync("/etc/ssl/certs/rootCA.crt")],
     };
 
     bot.telegram
       .setWebhook(`${process.env.SERVER_URI}/clothes${secretPath}`, {
-        certificate: { source: fs.readFileSync("/etc/ssl/certs/rootCA.crt") },
+        //certificate: { source: fs.readFileSync("/etc/ssl/certs/rootCA.crt") },
         allowed_updates,
         drop_pending_updates: true,
       })

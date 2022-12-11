@@ -36,7 +36,7 @@ console.log("started");
     };
 
     bot.telegram
-      .setWebhook(`${process.env.SERVER_URI}${secretPath}`, {
+      .setWebhook(`${process.env.SERVER_URI}/clothes${secretPath}`, {
         certificate: { source: fs.readFileSync("/etc/ssl/certs/rootCA.crt") },
         allowed_updates,
         drop_pending_updates: true,

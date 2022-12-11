@@ -25,19 +25,19 @@ console.log("started");
   if (process.env.NODE_ENV === "production") {
     bot.catch(console.error);
 
-    const secretPath = `/telegraf/${bot.secretPathComponent()}`;
+    const secretPath = `/clothes/telegraf/${bot.secretPathComponent()}`;
 
     console.log(secretPath);
 
     const tlsOptions = {
       key: fs.readFileSync("/etc/ssl/certs/rootCA.key"),
       cert: fs.readFileSync("/etc/ssl/certs/rootCA.crt"),
-      //ca: [fs.readFileSync("/etc/ssl/certs/rootCA.crt")],
+      ca: [fs.readFileSync("/etc/ssl/certs/rootCA.crt")],
     };
 
     bot.telegram
-      .setWebhook(`${process.env.SERVER_URI}/clothes${secretPath}`, {
-        //certificate: { source: fs.readFileSync("/etc/ssl/certs/rootCA.crt") },
+      .setWebhook(`${process.env.SERVER_URI}${secretPath}`, {
+        certificate: { source: fs.readFileSync("/etc/ssl/certs/rootCA.crt") },
         allowed_updates,
         drop_pending_updates: true,
       })

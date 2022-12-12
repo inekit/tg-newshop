@@ -63,14 +63,26 @@ scene.enter(async (ctx) => {
       [name?.toUpperCase(), description, price, sizes, vendor_code, link]
     )
     .catch(async (e) => {
-      return await ctx.replyWithKeyboard(
-        "ITEM_TITLE",
-        {
-          name: "item_keyboard",
-          args: [link, offset, count_items],
-        },
-        [name?.toUpperCase(), description, price, sizes, vendor_code, link]
-      );
+      return await ctx
+        .replyPhotoWithKeyboard(
+          photo,
+          "ITEM_TITLE",
+          {
+            name: "item_keyboard",
+            args: [undefined, offset, count_items],
+          },
+          [name?.toUpperCase(), description, price, sizes, vendor_code, link]
+        )
+        .catch(async (e) => {
+          return await ctx.replyWithKeyboard(
+            "ITEM_TITLE",
+            {
+              name: "item_keyboard",
+              args: [undefined, offset, count_items],
+            },
+            [name?.toUpperCase(), description, price, sizes, vendor_code, link]
+          );
+        });
     });
 
   ctx.scene.state.m1 = m?.message_id;

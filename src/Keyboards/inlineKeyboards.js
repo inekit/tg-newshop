@@ -145,8 +145,9 @@ exports.change_balance_keyboard = (ctx) => {
 };
 
 exports.item_keyboard = (ctx, link, offset, count_items) => {
-  console.log(offset, count_items);
   let navBArr = [];
+
+  link = link?.replace(/^\@/g, "t.me/");
 
   if (offset > 0)
     navBArr.push(
@@ -165,11 +166,12 @@ exports.item_keyboard = (ctx, link, offset, count_items) => {
       callbackButton(ctx.getTitle("BUTTON_NEXT"), `get_${Number(offset) + 1}`)
     );
 
-  return inlineKeyboard([
-    [urlButton(ctx.getTitle("BUTTON_LINK"), link ?? "www.google.com")],
-    navBArr,
-    [callbackButton(ctx.getTitle("BUTTON_HIDE"), "hide")],
-  ]);
+  const buttons = [];
+  if (link) buttons.push([urlButton(ctx.getTitle("BUTTON_LINK"))]);
+
+  buttons.push(navBArr, [callbackButton(ctx.getTitle("BUTTON_HIDE"), "hide")]);
+
+  return inlineKeyboard(buttons);
 };
 
 exports.instruction_keyboard = (ctx, id, link) => {

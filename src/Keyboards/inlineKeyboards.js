@@ -167,7 +167,7 @@ exports.item_keyboard = (ctx, link, offset, count_items) => {
     );
 
   const buttons = [];
-  if (link) buttons.push([urlButton(ctx.getTitle("BUTTON_LINK"))]);
+  if (link) buttons.push([urlButton(ctx.getTitle("BUTTON_LINK"), link)]);
 
   buttons.push(navBArr, [callbackButton(ctx.getTitle("BUTTON_HIDE"), "hide")]);
 

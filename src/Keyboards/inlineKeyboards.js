@@ -20,6 +20,30 @@ exports.items_list_keyboard = (ctx, ads) => {
   return keyboard;
 };
 
+exports.finish_updating_keyboard = (ctx) =>
+  inlineKeyboard(
+    [
+      callbackButton("Сохранить изменения", "send"),
+      callbackButton("Изменить поле имя", "adding_name"),
+      callbackButton("Изменить превью", "files"),
+      callbackButton("Изменить описание", "adding_description"),
+      callbackButton("Изменить размеры", "adding_sizes"),
+      callbackButton("Изменить артикул", "vendor_code"),
+      callbackButton("Изменить ссылку", "adding_link"),
+      callbackButton("Изменить цену", "adding_price"),
+    ],
+    { columns: 1 }
+  );
+
+exports.update_keyboard = (ctx) => {
+  const keyboard = inlineKeyboard(
+    [callbackButton(ctx.getTitle("UPDATE_BUTTON"), "reload")],
+    { columns: 1 }
+  );
+
+  return keyboard;
+};
+
 exports.reports_list_keyboard = (ctx, ads) => {
   const keyboard = inlineKeyboard(
     ads.map(({ id, item_name, static_name, price }) =>

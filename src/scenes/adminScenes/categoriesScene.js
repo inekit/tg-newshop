@@ -48,18 +48,6 @@ function inputFile(ctx, type) {
   });
 }
 
-nameHandler.on("text", (ctx) => {
-  ctx.scene.state.input = { adding_name: ctx.message.text };
-  ctx.replyStepByVariable("files");
-});
-
-linkHandler.on("text", (ctx) => {
-  ctx.scene.state.input.adding_link = ctx.message.text;
-  if (ctx.scene.state.table !== "item")
-    ctx.replyWithKeyboard("CONFIRM", "confirm_keyboard");
-  else ctx.replyStepByVariable("adding_price");
-});
-
 const scene = new CustomWizardScene("categoriesScene")
   .addStep({
     variable: "adding_category_name",
@@ -74,7 +62,7 @@ const scene = new CustomWizardScene("categoriesScene")
   .addStep({
     variable: "adding_name",
     confines: ["string45"],
-    handler: nameHandler,
+    //handler: nameHandler,
   })
   .addStep({
     variable: "files",
@@ -83,20 +71,99 @@ const scene = new CustomWizardScene("categoriesScene")
     handler: new FilesHandler(async (ctx) => {
       ctx.answerCbQuery().catch(console.log);
 
-      ctx.replyNextStep();
+      if (!ctx.scene.state.editStep) return ctx.replyNextStep();
+
+      ctx.replyWithKeyboard(getUpdateHeader(ctx), "finish_updating_keyboard");
+      ctx.wizard.selectStep(9);
+
+      delete ctx.scene.state.editStep;
+      delete ctx.scene.state.editHeaderFunc;
+      delete ctx.scene.state.editKeyboard;
     }),
   })
   .addStep({ variable: "adding_description", confines: ["string1000"] })
   .addStep({ variable: "adding_sizes", confines: ["string1000"] })
   .addStep({ variable: "vendor_code", confines: ["string1000"] })
-  .addStep({ variable: "adding_link", handler: linkHandler })
-  .addStep({ variable: "adding_price", confines: ["number"], type: "confirm" });
+  .addStep({ variable: "adding_link" })
+  .addStep({
+    variable: "adding_price",
+    confines: ["number"],
+    cb: async (ctx) => {
+      if (parseInt(ctx.message.text) != ctx.message.text)
+        return ctx.replyWithTitle("ENTER_ADDING_PRICE");
+      if (!ctx.wizard.state.input) ctx.wizard.state.input = {};
+
+      ctx.wizard.state.input.adding_price = ctx.message.text;
+
+      ctx.replyWithKeyboard(getUpdateHeader(ctx), "finish_updating_keyboard");
+      ctx.wizard.selectStep(ctx.wizard.cursor + 1);
+
+      delete ctx.scene.state.editStep;
+      delete ctx.scene.state.editHeaderFunc;
+      delete ctx.scene.state.editKeyboard;
+    },
+  })
+  .addSelect({
+    variable: "finish_updating",
+    options: {
+      "Сохранить изменения": "send",
+      "Изменить поле имя": "adding_name",
+      "Изменить превью": "files",
+      "Изменить описание": "adding_description",
+      "Изменить размеры": "adding_sizes",
+      "Изменить артикул": "vendor_code",
+      "Изменить ссылку": "adding_link",
+      "Изменить цену": "adding_price",
+    },
+    cb: async (ctx) => {
+      await ctx.answerCbQuery().catch((e) => {});
+
+      const action = ctx.match[0];
+
+      if (action !== "send") {
+        await ctx.replyStepByVariable(action);
+
+        return ctx.setEditStep(9, getUpdateHeader, "finish_updating_keyboard");
+      }
+
+      ctx.scene.state.table = "item";
+
+      await confirmAction(ctx);
+    },
+  });
+
+function getUpdateHeader(ctx) {
+  const {
+    adding_name,
+    files,
+    adding_description,
+    adding_sizes,
+    vendor_code,
+    adding_link,
+    adding_price,
+  } = ctx.wizard.state.input ?? {};
+  return ctx.getTitle("ITEM_CARD", [
+    adding_name?.toUpperCase(),
+    adding_description,
+    adding_price,
+    adding_sizes,
+    vendor_code,
+    adding_link,
+  ]);
+}
 
 scene.enter(async (ctx) => {
-  const { edit, offset = 0, category_id, category_name } = ctx.scene.state;
+  const {
+    edit,
+    offset = 0,
+    category_id,
+    category_name,
+    item_id,
+  } = ctx.scene.state;
   const perPage = 10;
   let keyboard;
   let title;
+  if (item_id) return getItem(ctx, item_id);
   if (category_id) {
     console.log(category_id, category_name);
     ctx.scene.state.items =
@@ -145,16 +212,35 @@ scene.action(/^delete\-(category|item)\-(.+)$/g, (ctx) => {
 scene.action(/^edit\-(category|item)\-(.+)$/g, (ctx) => {
   ctx.answerCbQuery().catch(console.log);
 
-  ctx.scene.state.action = "edit";
   ctx.scene.state.table = ctx.match[1];
+  ctx.scene.state.reference_id = ctx.match[2];
   ctx.scene.state.selected_item = ctx.match[2];
-  if (ctx.match[1] === "item") {
-    ctx.replyStep(2);
-    ctx.scene.state.reference_id = ctx.scene.state.subcategory_id;
-  } else if (ctx.match[1] === "subcategory") {
-    ctx.replyStep(1);
-    ctx.scene.state.reference_id = ctx.scene.state.category_id;
-  } else ctx.replyStep(0);
+  ctx.scene.state.action = "edit";
+
+  const {
+    name: adding_name,
+    photo: files,
+    description: adding_description,
+    sizes: adding_sizes,
+    vendor_code,
+    link: adding_link,
+    price: adding_price,
+  } = ctx.scene.state.item;
+
+  ctx.scene.state.input = {
+    adding_name,
+    files,
+    adding_description,
+    adding_sizes,
+    vendor_code,
+    adding_link,
+    adding_price,
+  };
+
+  console.log(ctx.scene.state.input);
+
+  ctx.replyWithKeyboard(getUpdateHeader(ctx), "finish_updating_keyboard");
+  ctx.wizard.selectStep(9);
 });
 
 scene.action(/^add\-(category|item)\-(.+)$/g, (ctx) => {
@@ -171,6 +257,10 @@ scene.action(/^add\-(category|item)\-(.+)$/g, (ctx) => {
 });
 
 scene.action("confirm", async (ctx) => {
+  await confirmAction(ctx);
+});
+
+async function confirmAction(ctx) {
   const connection = await tOrmCon;
 
   const { action, table, selected_item, reference_id } = ctx.scene.state;
@@ -332,7 +422,7 @@ scene.action("confirm", async (ctx) => {
   }
 
   delete ctx.scene.state.action,
-    ctx.scene.state.table,
+    table,
     ctx.scene.state.selected_item,
     ctx.scene.state.input,
     ctx.scene.state.reference_id,
@@ -340,8 +430,20 @@ scene.action("confirm", async (ctx) => {
     ctx.scene.state.subcategories,
     ctx.scene.state.items;
 
-  ctx.scene.enter("categoriesScene");
-});
+  if (action === "edit")
+    ctx.scene.enter("categoriesScene", {
+      item_id: ctx.scene.state.item_id,
+      category_name: ctx.scene.state.category_name,
+      category_id: ctx.scene.state.category_id,
+      offset: ctx.scene.state.offset,
+    });
+  else
+    ctx.scene.enter("categoriesScene", {
+      category_name: ctx.scene.state.category_name,
+      category_id: ctx.scene.state.category_id,
+      offset: ctx.scene.state.offset,
+    });
+}
 
 scene.action(/get\_(.+)\_(.+)/g, async (ctx) => {
   await ctx.answerCbQuery().catch(console.log);
@@ -406,11 +508,11 @@ scene.action(/^subcategory\-(.+)$/g, async (ctx) => {
 
 scene.action(/^item\-([0-9]+)$/g, async (ctx) => {
   ctx.answerCbQuery().catch(console.log);
-  const { subcategory_id, category_id, subcategory_name, category_name } =
-    ctx.scene.state;
-
   const item_id = (ctx.scene.state.item_id = ctx.match[1]);
+  getItem(ctx, item_id);
+});
 
+async function getItem(ctx, item_id) {
   const connection = await tOrmCon;
 
   const item = (ctx.scene.state.item = (
@@ -442,7 +544,7 @@ scene.action(/^item\-([0-9]+)$/g, async (ctx) => {
   ]);
 
   return ctx.replyWithKeyboard(title, keyboard);
-});
+}
 
 scene.action("back", async (ctx) => {
   ctx.answerCbQuery().catch(console.log);

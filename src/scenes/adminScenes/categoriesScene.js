@@ -135,13 +135,16 @@ const scene = new CustomWizardScene("categoriesScene")
 function getUpdateHeader(ctx) {
   const {
     adding_name,
-    files,
+    photo,
     adding_description,
     adding_sizes,
     vendor_code,
     adding_link,
     adding_price,
   } = ctx.wizard.state.input ?? {};
+
+  ctx.replyWithPhoto(photo).catch((e) => {});
+
   return ctx.getTitle("ITEM_CARD", [
     adding_name?.toUpperCase(),
     adding_description,
@@ -219,7 +222,7 @@ scene.action(/^edit\-(category|item)\-(.+)$/g, (ctx) => {
 
   const {
     name: adding_name,
-    photo: files,
+    photo,
     description: adding_description,
     sizes: adding_sizes,
     vendor_code,
@@ -229,7 +232,7 @@ scene.action(/^edit\-(category|item)\-(.+)$/g, (ctx) => {
 
   ctx.scene.state.input = {
     adding_name,
-    files,
+    photo,
     adding_description,
     adding_sizes,
     vendor_code,

@@ -121,6 +121,7 @@ const scene = new CustomWizardScene("categoriesScene")
       const action = ctx.match[0];
 
       if (action !== "send") {
+        if (action === "photo") delete ctx.wizard.state.input.photo;
         await ctx.replyStepByVariable(action);
 
         return ctx.setEditStep(9, getUpdateHeader, "finish_updating_keyboard");

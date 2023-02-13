@@ -25,7 +25,7 @@ console.log("started");
   if (process.env.NODE_ENV === "production") {
     bot.catch(console.error);
 
-    const secretPath = `/clothes/telegraf/${bot.secretPathComponent()}`;
+    const secretPath = `/delivery/telegraf/${bot.secretPathComponent()}`;
 
     console.log(secretPath);
 
@@ -45,7 +45,7 @@ console.log("started");
         console.log(r);
       });
 
-    await bot.startWebhook(secretPath, null, 3000);
+    await bot.startWebhook(secretPath, null, 3003);
 
     console.log(await ctx.telegram.getWebhookInfo());
   } else {

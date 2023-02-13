@@ -3,9 +3,11 @@ const {
   Composer,
   Scenes: { WizardScene, BaseScene },
 } = require("telegraf");
-const moment = require("moment");
+
+const tOrmCon = require("../../db/connection");
+
 const nameHandler = new Composer(),
-  linkHandler = new Composer(),
+  subCategoryHandler = new Composer(),
   itemHandler = new Composer();
 const { CustomWizardScene } = require("telegraf-steps");
 class FilesHandler extends Composer {
@@ -17,7 +19,6 @@ class FilesHandler extends Composer {
     this.action("skip", async (ctx) => confirmCb(ctx));
   }
 }
-const tOrmCon = require("../../db/connection");
 
 function inputFile(ctx, type) {
   if (!type)
@@ -39,14 +40,23 @@ function inputFile(ctx, type) {
   if (!ctx.scene.state.input?.[type + "s"])
     ctx.scene.state.input[type + "s"] = [];
 
-  //ctx.wizard.state.input?.[type+"s"].push(file_id)
+  ctx.wizard.state.input?.[type + "s"].push(file_id);
 
-  ctx.wizard.state.input[type] = file_id;
+  //ctx.wizard.state.input[type] = file_id;
   ctx.replyWithKeyboard("CONFIRM", {
     name: "custom_keyboard",
     args: [["CONFIRM"], ["skip"]],
   });
 }
+
+nameHandler.on("text", (ctx) => {
+  ctx.scene.state.input = { adding_name: ctx.message.text };
+  if (ctx.scene.state.table === "category")
+    ctx.replyStepByVariable("adding_category_description");
+  else if (ctx.scene.state.table === "subcategory")
+    ctx.replyWithKeyboard("CONFIRM", "confirm_keyboard");
+  else ctx.replyStepByVariable("files");
+});
 
 const scene = new CustomWizardScene("categoriesScene")
   .addStep({
@@ -55,36 +65,44 @@ const scene = new CustomWizardScene("categoriesScene")
     handler: nameHandler,
   })
   .addStep({
+    variable: "adding_category_description",
+    confines: ["string1000"],
+    cb: (ctx) => {
+      ctx.wizard.state.input.adding_category_description = ctx.message.text;
+
+      ctx.replyWithKeyboard("CONFIRM", "confirm_keyboard");
+    },
+  })
+  .addStep({
     variable: "adding_subcategory_name",
     confines: ["string45"],
-    //handler: nameHandler,
+    handler: nameHandler,
   })
   .addStep({
     variable: "adding_name",
     confines: ["string45"],
-    //handler: nameHandler,
+    handler: nameHandler,
   })
   .addStep({
     variable: "files",
     type: "action",
-    skipTo: "adding_description",
+    skipTo: "vendor_code",
     handler: new FilesHandler(async (ctx) => {
       ctx.answerCbQuery().catch(console.log);
 
       if (!ctx.scene.state.editStep) return ctx.replyNextStep();
 
       ctx.replyWithKeyboard(getUpdateHeader(ctx), "finish_updating_keyboard");
-      ctx.wizard.selectStep(9);
+      ctx.wizard.selectStep(8);
 
       delete ctx.scene.state.editStep;
       delete ctx.scene.state.editHeaderFunc;
       delete ctx.scene.state.editKeyboard;
     }),
   })
-  .addStep({ variable: "adding_description", confines: ["string1000"] })
-  .addStep({ variable: "adding_sizes", confines: ["string1000"] })
   .addStep({ variable: "vendor_code", confines: ["string1000"] })
-  .addStep({ variable: "adding_link" })
+  .addStep({ variable: "adding_sizes", confines: ["string1000"] })
+  //.addStep({ variable: "adding_description", confines: ["string1000"] })
   .addStep({
     variable: "adding_price",
     confines: ["number"],
@@ -109,10 +127,8 @@ const scene = new CustomWizardScene("categoriesScene")
       "Сохранить изменения": "send",
       "Изменить поле имя": "adding_name",
       "Изменить превью": "files",
-      "Изменить описание": "adding_description",
-      "Изменить размеры": "adding_sizes",
       "Изменить артикул": "vendor_code",
-      "Изменить ссылку": "adding_link",
+      "Изменить размеры": "adding_sizes",
       "Изменить цену": "adding_price",
     },
     cb: async (ctx) => {
@@ -124,7 +140,7 @@ const scene = new CustomWizardScene("categoriesScene")
         if (action === "files") delete ctx.wizard.state.input.photo;
         await ctx.replyStepByVariable(action);
 
-        return ctx.setEditStep(9, getUpdateHeader, "finish_updating_keyboard");
+        return ctx.setEditStep(8, getUpdateHeader, "finish_updating_keyboard");
       }
 
       ctx.scene.state.table = "item";
@@ -147,45 +163,90 @@ function getUpdateHeader(ctx) {
   ctx.replyWithPhoto(photo).catch((e) => {});
 
   return ctx.getTitle("ITEM_CARD", [
-    adding_name?.toUpperCase(),
-    adding_description,
+    vendor_code,
+    adding_name, //?.toUpperCase(),
     adding_price,
     adding_sizes,
-    vendor_code,
-    adding_link,
   ]);
 }
 
+async function getCategories() {
+  const connection = await tOrmCon;
+
+  return await connection
+    .query(
+      `select *
+    from categories c`
+    )
+    .catch((e) => {
+      console.log(e);
+    });
+}
+
+async function getItems(subCategoryId) {
+  const connection = await tOrmCon;
+
+  return await connection
+    .query(
+      `select i.id, i.name
+    from items i where i.subcategory_id = $1`,
+      [subCategoryId]
+    )
+    .catch((e) => {
+      console.log(e);
+    });
+}
+
+async function getSubCategories(categoryId) {
+  const connection = await tOrmCon;
+
+  return await connection
+    .query(
+      `select *
+     from subcategories c where category_id = $1`,
+      [categoryId]
+    )
+    .catch((e) => {
+      console.log(e);
+    });
+}
+
 scene.enter(async (ctx) => {
-  const {
-    edit,
-    offset = 0,
-    category_id,
-    category_name,
-    item_id,
-  } = ctx.scene.state;
-  const perPage = 10;
+  const { edit, category_id, subcategory_id, category_name, subcategory_name } =
+    ctx.scene.state;
   let keyboard;
   let title;
-  if (item_id) return getItem(ctx, item_id);
-  if (category_id) {
-    console.log(category_id, category_name);
+  if (subcategory_id) {
+    console.log(subcategory_id, subcategory_name);
     ctx.scene.state.items =
-      ctx.scene.state.items ?? (await getItems(category_id, offset, perPage));
-    ctx.scene.state.category_name =
-      category_name ??
-      ctx.scene.state.categories?.find((el) => {
+      ctx.scene.state.items ?? (await getItems(subcategory_id));
+    ctx.scene.state.subcategory_name =
+      subcategory_name ??
+      ctx.scene.state.subcategories.find((el) => {
         return el.id === parseInt(ctx.match[1]);
       })?.name;
 
     keyboard = {
       name: "categories_list_admin_keyboard",
-      args: [ctx.scene.state.items, "item", category_id, offset],
+      args: [ctx.scene.state.items, "item", subcategory_id],
     };
     title = ctx.getTitle("CHOOSE_ITEM", [
       category_name ?? "",
-      ctx.scene.state.category_name ?? "",
+      ctx.scene.state.subcategory_name ?? "",
     ]);
+  } else if (category_id) {
+    ctx.scene.state.subcategories =
+      ctx.scene.state.subcategories ?? (await getSubCategories(category_id));
+
+    keyboard = {
+      name: "categories_list_admin_keyboard",
+      args: [ctx.scene.state.subcategories, "subcategory", category_id],
+    };
+    title = ctx.getTitle("CHOOSE_SUBCATEGORY", [category_name ?? ""]);
+    console.log(
+      ctx.scene.state.subcategories?.length,
+      ctx.scene.state.subcategories
+    );
   } else {
     ctx.scene.state.categories =
       ctx.scene.state.categories ?? (await getCategories());
@@ -203,9 +264,7 @@ scene.enter(async (ctx) => {
   ctx.replyWithKeyboard(title, keyboard);
 });
 
-scene.action(/^delete\-(category|item)\-(.+)$/g, (ctx) => {
-  ctx.answerCbQuery().catch(console.log);
-
+scene.action(/^delete\-(category|item|subcategory)\-([0-9]+)$/g, (ctx) => {
   ctx.scene.state.action = "delete";
   ctx.scene.state.table = ctx.match[1];
   ctx.scene.state.selected_item = ctx.match[2];
@@ -213,7 +272,20 @@ scene.action(/^delete\-(category|item)\-(.+)$/g, (ctx) => {
   ctx.replyWithKeyboard("CONFIRM_DELETE", "confirm_keyboard");
 });
 
-scene.action(/^edit\-(category|item)\-(.+)$/g, (ctx) => {
+scene.action(/^edit\-(category|subcategory)\-([0-9]+)$/g, (ctx) => {
+  ctx.scene.state.action = "edit";
+  ctx.scene.state.table = ctx.match[1];
+  ctx.scene.state.selected_item = ctx.match[2];
+  if (ctx.match[1] === "item") {
+    ctx.replyStepByVariable("adding_name");
+    ctx.scene.state.reference_id = ctx.scene.state.subcategory_id;
+  } else if (ctx.match[1] === "subcategory") {
+    ctx.replyStepByVariable("adding_subcategory_name");
+    ctx.scene.state.reference_id = ctx.scene.state.category_id;
+  } else ctx.replyStepByVariable("adding_category_name");
+});
+
+scene.action(/^edit\-(item)\-(.+)$/g, (ctx) => {
   ctx.answerCbQuery().catch(console.log);
 
   ctx.scene.state.table = ctx.match[1];
@@ -241,42 +313,40 @@ scene.action(/^edit\-(category|item)\-(.+)$/g, (ctx) => {
     adding_price,
   };
 
-  console.log(ctx.scene.state.input);
+  console.log(ctx.scene.state.input, ctx.scene.state.item);
 
   ctx.replyWithKeyboard(getUpdateHeader(ctx), "finish_updating_keyboard");
-  ctx.wizard.selectStep(9);
+  ctx.wizard.selectStep(8);
 });
 
-scene.action(/^add\-(category|item)\-(.+)$/g, (ctx) => {
-  ctx.answerCbQuery().catch(console.log);
-
+scene.action(/^add\-(category|item|subcategory)\-([0-9]+)$/g, (ctx) => {
+  console.log(222);
   ctx.scene.state.action = "add";
   ctx.scene.state.table = ctx.match[1];
   ctx.scene.state.reference_id = ctx.match[2];
   if (ctx.match[1] === "item") {
-    ctx.replyStep(2);
+    ctx.replyStepByVariable("adding_name");
   } else if (ctx.match[1] === "subcategory") {
-    ctx.replyStep(1);
-  } else ctx.replyStep(0);
-});
-
-scene.action("confirm", async (ctx) => {
-  await confirmAction(ctx);
+    ctx.replyStepByVariable("adding_subcategory_name");
+  } else ctx.replyStepByVariable("adding_category_name");
 });
 
 async function confirmAction(ctx) {
   const connection = await tOrmCon;
 
   const { action, table, selected_item, reference_id } = ctx.scene.state;
+
   const {
     adding_name,
     adding_description,
+    adding_category_description,
     adding_sizes,
     vendor_code,
-    adding_link,
     adding_price,
-    photo,
+    photos,
   } = ctx.scene.state.input ?? {};
+
+  console.log(ctx.scene.state.input);
   switch (action) {
     case "delete": {
       async function deleteAction(query) {
@@ -286,7 +356,7 @@ async function confirmAction(ctx) {
             console.log(e);
           });
 
-        if (!res) {
+        if (!res?.affectedRows) {
           return ctx
             .answerCbQuery(ctx.getTitle("NOT_AFFECTED"))
             .catch(console.log);
@@ -317,50 +387,66 @@ async function confirmAction(ctx) {
         });
 
         if (!res) {
-          return ctx
-            .answerCbQuery(ctx.getTitle("NOT_AFFECTED"))
-            .catch(console.log);
-        }
-        await ctx.answerCbQuery(ctx.getTitle("AFFECTED")).catch(console.log);
-        return res?.insertId;
+          ctx.answerCbQuery(ctx.getTitle("NOT_AFFECTED")).catch(console.log);
+        } else
+          await ctx.answerCbQuery(ctx.getTitle("AFFECTED")).catch(console.log);
+        return res;
       }
       switch (table) {
         case "subcategory": {
           await addAction(
-            `insert into subcategories (name, categoryId) values ($1,$2)`,
+            `insert into subcategories (name, category_id) values ($1,$2)`,
             [adding_name, reference_id]
           );
           break;
         }
         case "category": {
           await addAction(
-            `insert into categories (name, description, instruction,link, photo) values ($1,$2,$3,$4,$5)`,
-            [
-              adding_name,
-              adding_description,
-              adding_sizes,
-              vendor_code,
-              adding_link,
-              photo,
-            ]
+            `insert into categories (name, description) values ($1,$2)`,
+            [adding_name, adding_category_description]
           );
           break;
         }
         case "item": {
-          await addAction(
-            `insert into items 
-            (name, category_name, description, sizes, vendor_code,link, price, photo) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [
-              adding_name,
-              reference_id,
-              adding_description,
-              adding_sizes,
-              vendor_code,
-              adding_link,
-              adding_price,
-              photo,
-            ]
-          );
+          const connection = await tOrmCon;
+
+          const queryRunner = connection.createQueryRunner();
+
+          try {
+            await queryRunner.connect();
+
+            const id = (
+              await addAction(
+                `insert into items (name, subcategory_id, vendor_code, price, photo) values ($1,$2,$3,$4,$5) returning id`,
+                [
+                  adding_name,
+                  reference_id,
+                  vendor_code,
+                  adding_price,
+                  photos[0],
+                ]
+              )
+            )?.[0]?.id;
+
+            console.log(id);
+
+            for (p of photos) {
+              await connection.query(
+                "insert into photos (photo, item_id) values ($1,$2)",
+                [p, id]
+              );
+            }
+          } catch {
+            async (e) => {
+              console.log(e);
+              await queryRunner.rollbackTransaction();
+            };
+          } finally {
+            async (res) => {
+              await queryRunner.release();
+            };
+          }
+
           break;
         }
       }
@@ -372,7 +458,7 @@ async function confirmAction(ctx) {
           console.log(e);
         });
 
-        if (!res) {
+        if (!res?.affectedRows) {
           return ctx
             .answerCbQuery(ctx.getTitle("NOT_AFFECTED"))
             .catch(console.log);
@@ -390,32 +476,21 @@ async function confirmAction(ctx) {
         }
         case "category": {
           await editAction(
-            `update categories set name = $1, description=$2, sizes=$3, vendor_code=$4, link=$5, photo = $6 where id = $7`,
-            [
-              adding_name,
-              adding_description,
-              adding_sizes,
-              vendor_code,
-              adding_link,
-              photo,
-              selected_item,
-            ]
+            `update categories set name = $1, description = $3 where id = $2`,
+            [adding_name, selected_item, adding_category_description]
           );
           break;
         }
         case "item": {
           await editAction(
-            `update items set name=$1, id=$2, description=$3, sizes=$4, vendor_code=$5, link=$6, price=$7, photo = $8 where id = $9`,
+            `update items set name=$1, id=$2, vendor_code=$3, price=$4, photo = $5, sizes=$6 where id = $2`,
             [
               adding_name,
               selected_item,
-              adding_description,
-              adding_sizes,
               vendor_code,
-              adding_link,
               adding_price,
               photo,
-              selected_item,
+              adding_sizes,
             ]
           );
           break;
@@ -426,7 +501,7 @@ async function confirmAction(ctx) {
   }
 
   delete ctx.scene.state.action,
-    table,
+    ctx.scene.state.table,
     ctx.scene.state.selected_item,
     ctx.scene.state.input,
     ctx.scene.state.reference_id,
@@ -434,47 +509,20 @@ async function confirmAction(ctx) {
     ctx.scene.state.subcategories,
     ctx.scene.state.items;
 
-  if (action === "edit")
-    ctx.scene.enter("categoriesScene", {
-      item_id: ctx.scene.state.item_id,
-      category_name: ctx.scene.state.category_name,
-      category_id: ctx.scene.state.category_id,
-      offset: ctx.scene.state.offset,
-    });
-  else
-    ctx.scene.enter("categoriesScene", {
-      category_name: ctx.scene.state.category_name,
-      category_id: ctx.scene.state.category_id,
-      offset: ctx.scene.state.offset,
-    });
+  ctx.scene.enter("categoriesScene");
 }
 
-scene.action(/get\_(.+)\_(.+)/g, async (ctx) => {
-  await ctx.answerCbQuery().catch(console.log);
-
-  const offset = ctx.match[2];
-  const category_id = ctx.match[1];
-
-  console.log("get", offset, category_id);
-
-  const category_name = category_id;
-
-  if (offset < 0) return;
-
-  ctx.scene.enter("categoriesScene", {
-    edit: true,
-    category_id,
-    category_name,
-    categories: ctx.scene.state.categories,
-    offset,
-  });
+scene.action("confirm", async (ctx) => {
+  await confirmAction(ctx);
 });
 
-scene.action(/^category\-(.+)$/g, async (ctx) => {
-  await ctx.answerCbQuery().catch(console.log);
+scene.action(/^category\-([0-9]+)$/g, async (ctx) => {
+  ctx.answerCbQuery().catch(console.log);
   const category_id = ctx.match[1];
 
-  const category_name = category_id;
+  const category_name = ctx.scene.state.categories.find(
+    (el) => el.id === parseInt(ctx.match[1])
+  )?.name;
 
   ctx.scene.enter("categoriesScene", {
     edit: true,
@@ -484,7 +532,7 @@ scene.action(/^category\-(.+)$/g, async (ctx) => {
   });
 });
 
-scene.action(/^subcategory\-(.+)$/g, async (ctx) => {
+scene.action(/^subcategory\-([0-9]+)$/g, async (ctx) => {
   ctx.answerCbQuery().catch(console.log);
 
   ctx.scene.state.subcategory_id = ctx.match[1];
@@ -510,18 +558,47 @@ scene.action(/^subcategory\-(.+)$/g, async (ctx) => {
   });
 });
 
+async function getOrderId(con, userId) {
+  let id;
+
+  id = (
+    await con.query(
+      "select * from orders o where user_id = $1 and o.status = 'created' limit 1",
+      [userId]
+    )
+  )?.[0]?.id;
+
+  if (!id)
+    id = (await con.query("insert into orders (user_id) values($1)", [userId]))
+      ?.insertId;
+
+  return id;
+}
+
 scene.action(/^item\-([0-9]+)$/g, async (ctx) => {
   ctx.answerCbQuery().catch(console.log);
-  const item_id = (ctx.scene.state.item_id = ctx.match[1]);
-  getItem(ctx, item_id);
-});
+  const { subcategory_id, category_id, subcategory_name, category_name } =
+    ctx.scene.state;
 
-async function getItem(ctx, item_id) {
+  const item_id = ctx.match[1];
+
   const connection = await tOrmCon;
+
+  ctx.scene.state.order_id = await getOrderId(connection, ctx.from?.id);
 
   const item = (ctx.scene.state.item = (
     await connection
-      .query(`select * from items where id = $1`, [item_id])
+      .query(
+        `select i.*, CASE WHEN count.count is null THEN 0 ELSE count.count END AS count, subcategory_id
+        from items i 
+        left join (select count, oi.item_id id from orders_items oi 
+            left join orders o on (o.id = oi.order_id and o.user_id = oi.order_user_id) or oi.order_id is null
+            where ((oi.order_id =$1 and oi.order_user_id = $2) or oi.order_id is null) and oi.item_id = $3 limit 1) count
+        on count.id = i.id or count.id is null
+        where i.id = $4
+    limit 1`,
+        [ctx.scene.state.order_id, ctx.from?.id, item_id, item_id]
+      )
       .catch((e) => {
         console.log(e);
         ctx.replyWithTitle("DB_ERROR");
@@ -531,67 +608,35 @@ async function getItem(ctx, item_id) {
   if (!ctx.scene.state.item) {
     ctx.replyWithTitle("NO_SUCH_ITEM");
     delete ctx.scene.state;
-    ctx.scene.enter("catalogScene", { edit: true });
+    return ctx.scene.enter("adminScene", { edit: true });
   }
 
   const keyboard = { name: "item_keyboard_admin", args: [item_id] };
 
-  await ctx.replyWithPhoto(item.photo).catch((e) => {});
+  const { vendor_code, sizes, name, price } = item;
 
-  const title = ctx.getTitle("ITEM_CARD", [
-    item.name?.toUpperCase(),
-    item.description,
-    item.price,
-    item.sizes,
-    item.vendor_code,
-    item.link,
-  ]);
+  const title = ctx.getTitle("ITEM_CARD", [vendor_code, name, price, sizes]);
 
-  return ctx.replyWithKeyboard(title, keyboard);
-}
+  return ctx.editMenu(title, keyboard);
+});
 
 scene.action("back", async (ctx) => {
   ctx.answerCbQuery().catch(console.log);
 
-  if (ctx.scene.state.item_id) {
-    delete ctx.scene.state;
+  if (ctx.scene.state.subcategory_id) {
+    delete ctx.scene.state.subcategory_id,
+      ctx.scene.state.items,
+      ctx.scene.state.subcategory_name;
     ctx.scene.enter("categoriesScene", {
-      //edit: true,
-      category_name: ctx.scene.state.category_name,
+      edit: true,
       category_id: ctx.scene.state.category_id,
-      offset: ctx.scene.state.offset,
+      subcategories: ctx.scene.state.subcategories,
+      category_name: ctx.scene.state.category_name,
     });
   } else if (ctx.scene.state.category_id) {
     delete ctx.scene.state;
     ctx.scene.enter("categoriesScene", { edit: true });
   }
 });
-
-async function getCategories() {
-  const connection = await tOrmCon;
-
-  return await connection
-    .query(
-      `select *
-      from categories c`
-    )
-    .catch((e) => {
-      console.log(e);
-    });
-}
-
-async function getItems(category_name, offset, perPage) {
-  const connection = await tOrmCon;
-
-  return await connection
-    .query(
-      `select *
-      from items where category_name = $1 order by id DESC limit $2 offset $3`,
-      [category_name, perPage, offset * perPage]
-    )
-    .catch((e) => {
-      console.log(e);
-    });
-}
 
 module.exports = scene;

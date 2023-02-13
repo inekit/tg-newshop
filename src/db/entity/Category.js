@@ -4,11 +4,20 @@ module.exports = new EntitySchema({
   name: "Category",
   tableName: "categories",
   columns: {
-    name: {
+    id: {
+      type: "int",
       primary: true,
+      generated: true,
+    },
+    name: {
       type: "varchar",
-      length: 255,
-      nullable: false,
+      length: 200,
+      unique: true,
+    },
+    description: {
+      type: "varchar",
+      length: 1000,
+      default: "",
     },
   },
 });

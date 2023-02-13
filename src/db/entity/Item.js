@@ -5,21 +5,31 @@ module.exports = new EntitySchema({
   tableName: "items",
   columns: {
     id: {
-      primary: true,
       type: "int",
+      primary: true,
       generated: true,
     },
     name: {
       type: "varchar",
-      length: 1000,
-      nullable: true,
+      length: 45,
+      nullable: false,
     },
-    description: {
+    vendor_code: {
       type: "varchar",
       length: 1000,
-      nullable: true,
+      default: "",
     },
     price: {
+      type: "int",
+      nullable: false,
+    },
+    sizes: {
+      type: "varchar",
+      length: 1000,
+      default: "1",
+      nullable: false,
+    },
+    subcategory_id: {
       type: "int",
       nullable: false,
     },
@@ -28,31 +38,11 @@ module.exports = new EntitySchema({
       length: 255,
       nullable: true,
     },
-    sizes: {
-      type: "varchar",
-      length: 1000,
-      nullable: true,
-    },
-    link: {
-      type: "varchar",
-      length: 1000,
-      nullable: true,
-    },
-    vendor_code: {
-      type: "varchar",
-      length: 1000,
-      nullable: true,
-    },
-    category_name: {
-      type: "varchar",
-      length: 255,
-      nullable: false,
-    },
   },
   relations: {
-    category: {
-      target: "Category",
-      type: "one-to-many",
+    subcategory: {
+      target: "SubCategory",
+      type: "many-to-one",
       cascade: true,
       joinColumn: true,
       onDelete: "cascade",

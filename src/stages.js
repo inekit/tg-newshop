@@ -9,6 +9,9 @@ const mainStage = new Stage(
   [
     ...require("./scenes/mainScene"),
     require("./scenes/clientScenes/catalogScene"),
+    require("./scenes/clientScenes/cartScene"),
+    require("./scenes/clientScenes/itemScene"),
+    require("./scenes/clientScenes/ordersScene"),
 
     require("./scenes/adminScenes/adminScene"),
     require("./scenes/adminScenes/adminsScene"),

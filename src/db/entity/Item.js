@@ -33,6 +33,11 @@ module.exports = new EntitySchema({
       type: "int",
       nullable: false,
     },
+    description: {
+      type: "varchar",
+      length: 1000,
+      default: "",
+    },
     photo: {
       type: "varchar",
       length: 255,

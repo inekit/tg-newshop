@@ -19,7 +19,7 @@
   "BUTTON_ADD_ITEM": "Добавить",
   "BUTTON_EDIT": "Изменить",
   "BUTTON_DELETE": "Удалить",
-  "ITEM_CARD": "Артикул: *\n<b>*</b>\n\nЦена - * ₽\n\nРазмеры в наличии (EU): *",
+  "ITEM_CARD": "Артикул: *\n<b>*</b>\n\nЦена - * ₽\n\nРазмеры в наличии (EU): *\n\n*",
   "ENTER_ADDING_NAME": "Введите название товара",
   "BUTTON_CATALOG": "Каталог",
   "BUTTON_ADMINS": "Администраторы",

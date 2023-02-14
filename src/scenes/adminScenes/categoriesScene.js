@@ -3,6 +3,7 @@ const {
   Composer,
   Scenes: { WizardScene, BaseScene },
 } = require("telegraf");
+const mediaGroup = require("telegraf-media-group");
 
 const tOrmCon = require("../../db/connection");
 
@@ -16,37 +17,45 @@ class FilesHandler extends Composer {
 
     this.on("photo", (ctx) => inputFile(ctx, "photo"));
 
+    //this.on("media_group", (ctx) => inputFile(ctx, "photo"));
+
     this.action("skip", async (ctx) => confirmCb(ctx));
   }
 }
 
 function inputFile(ctx, type) {
-  if (!type)
-    type = ctx.message?.photo
-      ? "photo"
-      : ctx.message?.audio
-      ? "audio"
-      : "document";
+  const messages = ctx.mediaGroup ?? [ctx.message];
 
-  const file_id =
-    ctx.message?.[type]?.[0]?.file_id ?? ctx.message?.[type]?.file_id;
+  console.log("mg", ctx.mediaGroup);
 
-  console.log(1, file_id, ctx.message);
+  for (mes of messages) {
+    if (!type) type = mes.photo ? "photo" : mes.audio ? "audio" : "document";
 
-  if (!file_id) return ctx.replyWithTitle("TRY_AGAIN");
+    const file_id = mes[type]?.[0]?.file_id ?? mes[type]?.file_id;
 
-  if (!ctx.scene?.state?.input) ctx.scene.state.input = {};
+    console.log(1, file_id, mes);
 
-  if (!ctx.scene.state.input?.[type + "s"])
-    ctx.scene.state.input[type + "s"] = [];
+    if (!file_id) return ctx.replyWithTitle("TRY_AGAIN");
 
-  ctx.wizard.state.input?.[type + "s"].push(file_id);
+    if (!ctx.scene?.state?.input) ctx.scene.state.input = {};
 
-  //ctx.wizard.state.input[type] = file_id;
-  ctx.replyWithKeyboard("CONFIRM", {
-    name: "custom_keyboard",
-    args: [["CONFIRM"], ["skip"]],
-  });
+    if (!ctx.scene.state.input?.[type + "s"])
+      ctx.scene.state.input[type + "s"] = [];
+
+    ctx.wizard.state.input?.[type + "s"].push(file_id);
+  }
+
+  if (
+    !ctx.message.media_group_id ||
+    ctx.scene.state.media_group_id !== ctx.message.media_group_id
+  ) {
+    ctx.scene.state.media_group_id = ctx.message.media_group_id;
+    //ctx.wizard.state.input[type] = file_id;
+    ctx.replyWithKeyboard("CONFIRM", {
+      name: "custom_keyboard",
+      args: [["CONFIRM"], ["skip"]],
+    });
+  }
 }
 
 nameHandler.on("text", (ctx) => {
@@ -93,7 +102,7 @@ const scene = new CustomWizardScene("categoriesScene")
       if (!ctx.scene.state.editStep) return ctx.replyNextStep();
 
       ctx.replyWithKeyboard(getUpdateHeader(ctx), "finish_updating_keyboard");
-      ctx.wizard.selectStep(8);
+      ctx.wizard.selectStep(9);
 
       delete ctx.scene.state.editStep;
       delete ctx.scene.state.editHeaderFunc;
@@ -102,7 +111,7 @@ const scene = new CustomWizardScene("categoriesScene")
   })
   .addStep({ variable: "vendor_code", confines: ["string1000"] })
   .addStep({ variable: "adding_sizes", confines: ["string1000"] })
-  //.addStep({ variable: "adding_description", confines: ["string1000"] })
+  .addStep({ variable: "adding_description", confines: ["string1000"] })
   .addStep({
     variable: "adding_price",
     confines: ["number"],
@@ -128,6 +137,7 @@ const scene = new CustomWizardScene("categoriesScene")
       "Изменить поле имя": "adding_name",
       "Изменить превью": "files",
       "Изменить артикул": "vendor_code",
+      "Изменить описание": "adding_description",
       "Изменить размеры": "adding_sizes",
       "Изменить цену": "adding_price",
     },
@@ -140,7 +150,7 @@ const scene = new CustomWizardScene("categoriesScene")
         if (action === "files") delete ctx.wizard.state.input.photo;
         await ctx.replyStepByVariable(action);
 
-        return ctx.setEditStep(8, getUpdateHeader, "finish_updating_keyboard");
+        return ctx.setEditStep(9, getUpdateHeader, "finish_updating_keyboard");
       }
 
       ctx.scene.state.table = "item";
@@ -167,6 +177,7 @@ function getUpdateHeader(ctx) {
     adding_name, //?.toUpperCase(),
     adding_price,
     adding_sizes,
+    adding_description,
   ]);
 }
 
@@ -316,7 +327,7 @@ scene.action(/^edit\-(item)\-(.+)$/g, (ctx) => {
   console.log(ctx.scene.state.input, ctx.scene.state.item);
 
   ctx.replyWithKeyboard(getUpdateHeader(ctx), "finish_updating_keyboard");
-  ctx.wizard.selectStep(8);
+  ctx.wizard.selectStep(9);
 });
 
 scene.action(/^add\-(category|item|subcategory)\-([0-9]+)$/g, (ctx) => {
@@ -346,7 +357,7 @@ async function confirmAction(ctx) {
     photos,
   } = ctx.scene.state.input ?? {};
 
-  console.log(ctx.scene.state.input);
+  console.log("fin", ctx.scene.state.input, action, table);
   switch (action) {
     case "delete": {
       async function deleteAction(query) {
@@ -417,13 +428,14 @@ async function confirmAction(ctx) {
 
             const id = (
               await addAction(
-                `insert into items (name, subcategory_id, vendor_code, price, photo) values ($1,$2,$3,$4,$5) returning id`,
+                `insert into items (name, subcategory_id, vendor_code, price, photo, description) values ($1,$2,$3,$4,$5,$6) returning id`,
                 [
                   adding_name,
                   reference_id,
                   vendor_code,
                   adding_price,
                   photos[0],
+                  adding_description,
                 ]
               )
             )?.[0]?.id;
@@ -482,18 +494,45 @@ async function confirmAction(ctx) {
           break;
         }
         case "item": {
-          await editAction(
-            `update items set name=$1, id=$2, vendor_code=$3, price=$4, photo = $5, sizes=$6 where id = $2`,
-            [
-              adding_name,
-              selected_item,
-              vendor_code,
-              adding_price,
-              photo,
-              adding_sizes,
-            ]
-          );
-          break;
+          const connection = await tOrmCon;
+
+          const queryRunner = connection.createQueryRunner();
+          try {
+            await queryRunner.connect();
+
+            await connection.query(
+              `update items set name=$1, id=$2, vendor_code=$3, price=$4, photo = $5, sizes=$6, description = $7 where id = $2`,
+              [
+                adding_name,
+                selected_item,
+                vendor_code,
+                adding_price,
+                ctx.scene.state.item.photo,
+                adding_sizes,
+                adding_description,
+              ]
+            );
+
+            if (photos?.length) {
+              await connection.query("delete from photos where item_id = $1", [
+                selected_item,
+              ]);
+
+              for (p of photos) {
+                await connection.query(
+                  "insert into photos (photo, item_id) values ($1,$2)",
+                  [p, selected_item]
+                );
+              }
+            }
+          } catch (e) {
+            console.log(e);
+            await queryRunner.rollbackTransaction();
+          } finally {
+            await queryRunner.release();
+
+            break;
+          }
         }
       }
       break;
@@ -613,9 +652,15 @@ scene.action(/^item\-([0-9]+)$/g, async (ctx) => {
 
   const keyboard = { name: "item_keyboard_admin", args: [item_id] };
 
-  const { vendor_code, sizes, name, price } = item;
+  const { vendor_code, sizes, name, price, description } = item;
 
-  const title = ctx.getTitle("ITEM_CARD", [vendor_code, name, price, sizes]);
+  const title = ctx.getTitle("ITEM_CARD", [
+    vendor_code,
+    name,
+    price,
+    sizes,
+    description,
+  ]);
 
   return ctx.editMenu(title, keyboard);
 });

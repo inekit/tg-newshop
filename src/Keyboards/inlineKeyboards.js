@@ -176,6 +176,7 @@ exports.finish_updating_keyboard = (ctx) =>
       callbackButton("Изменить поле имя", "adding_name"),
       callbackButton("Изменить превью", "files"),
       callbackButton("Изменить артикул", "vendor_code"),
+      callbackButton("Изменить описание", "adding_description"),
       callbackButton("Изменить размеры", "adding_sizes"),
       callbackButton("Изменить цену", "adding_price"),
     ],
@@ -262,9 +263,13 @@ exports.change_text_actions_keyboard = (ctx) => {
 
 exports.orders_list_keyboard = (ctx, ads) => {
   const keyboard = inlineKeyboard(
-    ads.map(({ id, order_date }) =>
-      callbackButton(moment(order_date).format("MM.DD.YYYY"), "order-" + id)
-    ),
+    ads.map(({ id, order_date }) => {
+      const orderDate = moment(order_date);
+      return callbackButton(
+        orderDate.isValid() ? orderDate.format("hh:mm MM.DD.YYYY") : "Корзина",
+        "order-" + id
+      );
+    }),
     { columns: 1 }
   );
 
@@ -329,23 +334,28 @@ exports.item_keyboard = (ctx, count, offset) => {
       callbackButton(ctx.getTitle("BUTTON_PREV"), `get_${Number(offset) - 1}`),
       callbackButton(ctx.getTitle("BUTTON_NEXT"), `get_${Number(offset) + 1}`),
     ],
-    [
-      callbackButton(
-        ctx.getTitle("BUTTON_ADD_TO_CART", [
-          count && count > 0 ? ` (${count.toString()})` : "",
-        ]),
-        "add_to_cart"
-      ),
-    ],
-    [callbackButton(ctx.getTitle("BUTTON_BACK"), "back")],
   ]);
 
-  console.log(count);
+  let bGroup = [
+    callbackButton(
+      ctx.getTitle("BUTTON_ADD_TO_CART", [
+        count && count > 0 ? ` (${count.toString()})` : "",
+      ]),
+      "add_to_cart"
+    ),
+  ];
+
   if (count && count > 0) {
-    keyboard.reply_markup.inline_keyboard.push([
-      callbackButton(ctx.getTitle("BUTTON_GO_TO_CART"), "go_to_cart"),
-    ]);
+    bGroup.push(
+      callbackButton(ctx.getTitle("BUTTON_GO_TO_CART"), "go_to_cart")
+    );
   }
+
+  keyboard.reply_markup.inline_keyboard.push(bGroup);
+
+  keyboard.reply_markup.inline_keyboard.push([
+    callbackButton(ctx.getTitle("BUTTON_BACK"), "back"),
+  ]);
 
   return keyboard;
 };

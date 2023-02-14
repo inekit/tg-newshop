@@ -60,8 +60,10 @@ scene.action(/^order\-([0-9]+)$/g, async (ctx) => {
 
   const sum = order?.order_items.reduce((prev, cur, i) => prev + cur.price, 0);
 
+  const orderDate = moment(order?.order_date);
+
   ctx.editMenu("ORDER_CARD", "go_back_keyboard", [
-    moment(order?.order_date).format("hh:mm MM.DD.YYYY"),
+    orderDate.isValid() ? orderDate.format("hh:mm MM.DD.YYYY") : "Корзина",
     orderStr,
     sum,
   ]);

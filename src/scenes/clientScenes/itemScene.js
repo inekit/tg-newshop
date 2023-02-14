@@ -88,9 +88,17 @@ scene.enter(async (ctx) => {
 
   console.log(item.photos);
 
-  const { vendor_code, sizes, name, price } = item;
+  item.photo = item?.photos?.pop();
 
-  const title = ctx.getTitle("ITEM_CARD", [vendor_code, name, price, sizes]);
+  const { vendor_code, sizes, name, price, description } = item;
+
+  const title = ctx.getTitle("ITEM_CARD", [
+    vendor_code,
+    name,
+    price,
+    sizes,
+    description,
+  ]);
 
   if (main_menu_button) await ctx.replyWithKeyboard("⚙️", main_menu_button);
 

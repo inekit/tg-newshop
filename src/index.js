@@ -3,6 +3,7 @@ require("dotenv").config();
 const fs = require("fs");
 const allowed_updates = ["message", "callback_query", "chat_member"];
 const TOKEN = process.env.BOT_TOKEN;
+const mediaGroup = require("telegraf-media-group");
 
 const keyboards = {
   ...require("./Keyboards/keyboards"),
@@ -21,6 +22,7 @@ console.log("started");
 
 (async () => {
   bot.use(telegraf.session(), require("./stages"));
+  bot.use(mediaGroup());
 
   if (process.env.NODE_ENV === "production") {
     bot.catch(console.error);

@@ -13,6 +13,7 @@ module.exports = new EntitySchema({
       type: "int",
       primary: true,
       nullable: false,
+      primary: true,
     },
   },
   relations: {

@@ -123,7 +123,8 @@ scene.enter(async (ctx) => {
     };
     title = ctx.getTitle("CHOOSE_CATEGORY");
     if (!ctx.scene.state.categories?.length) {
-      return await ctx.replyWithTitle("NO_CATEGORIES_ADDED");
+      await ctx.replyWithTitle("NO_CATEGORIES_ADDED");
+      return ctx.scene.enter("clientScene");
     }
   }
 

@@ -423,6 +423,8 @@ async function confirmAction(ctx) {
 
           const queryRunner = connection.createQueryRunner();
 
+          console.log("adding");
+
           try {
             await queryRunner.connect();
 
@@ -434,29 +436,24 @@ async function confirmAction(ctx) {
                   reference_id,
                   vendor_code,
                   adding_price,
-                  photos[0],
+                  photos?.[0],
                   adding_description,
                 ]
               )
             )?.[0]?.id;
 
-            console.log(id);
-
-            for (p of photos) {
-              await connection.query(
-                "insert into photos (photo, item_id) values ($1,$2)",
-                [p, id]
-              );
-            }
-          } catch {
-            async (e) => {
-              console.log(e);
-              await queryRunner.rollbackTransaction();
-            };
+            if (photos?.[0])
+              for (p of photos) {
+                await connection.query(
+                  "insert into photos (photo, item_id) values ($1,$2)",
+                  [p, id]
+                );
+              }
+          } catch (e) {
+            console.log(e);
+            await queryRunner.rollbackTransaction();
           } finally {
-            async (res) => {
-              await queryRunner.release();
-            };
+            await queryRunner.release();
           }
 
           break;

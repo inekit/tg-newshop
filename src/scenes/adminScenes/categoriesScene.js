@@ -59,7 +59,9 @@ function inputFile(ctx, type) {
 }
 
 nameHandler.on("text", (ctx) => {
-  ctx.scene.state.input = { adding_name: ctx.message.text };
+  if (!ctx.scene.state.input)
+    ctx.scene.state.input = { adding_name: ctx.message.text };
+  else ctx.scene.state.input.adding_name = ctx.message.text;
   if (ctx.scene.state.table === "category")
     ctx.replyStepByVariable("adding_category_description");
   else if (ctx.scene.state.table === "subcategory")
@@ -170,6 +172,8 @@ function getUpdateHeader(ctx) {
     adding_price,
   } = ctx.wizard.state.input ?? {};
 
+  console.log(ctx.wizard.state.input);
+
   ctx.replyWithPhoto(photo).catch((e) => {});
 
   return ctx.getTitle("ITEM_CARD", [
@@ -227,10 +231,17 @@ scene.enter(async (ctx) => {
     ctx.scene.state;
   let keyboard;
   let title;
+
+  console.log(
+    "start",
+    category_id,
+    subcategory_id,
+    category_name,
+    subcategory_name
+  );
   if (subcategory_id) {
-    console.log(subcategory_id, subcategory_name);
-    ctx.scene.state.items =
-      ctx.scene.state.items ?? (await getItems(subcategory_id));
+    console.log("subcategory-", subcategory_id);
+    ctx.scene.state.items = await getItems(subcategory_id);
     ctx.scene.state.subcategory_name =
       subcategory_name ??
       ctx.scene.state.subcategories.find((el) => {
@@ -246,8 +257,7 @@ scene.enter(async (ctx) => {
       ctx.scene.state.subcategory_name ?? "",
     ]);
   } else if (category_id) {
-    ctx.scene.state.subcategories =
-      ctx.scene.state.subcategories ?? (await getSubCategories(category_id));
+    ctx.scene.state.subcategories = await getSubCategories(category_id);
 
     keyboard = {
       name: "categories_list_admin_keyboard",
@@ -259,8 +269,7 @@ scene.enter(async (ctx) => {
       ctx.scene.state.subcategories
     );
   } else {
-    ctx.scene.state.categories =
-      ctx.scene.state.categories ?? (await getCategories());
+    ctx.scene.state.categories = await getCategories();
     keyboard = {
       name: "categories_list_admin_keyboard",
       args: [ctx.scene.state.categories, "category"],
@@ -276,6 +285,8 @@ scene.enter(async (ctx) => {
 });
 
 scene.action(/^delete\-(category|item|subcategory)\-([0-9]+)$/g, (ctx) => {
+  ctx.answerCbQuery().catch(console.log);
+
   ctx.scene.state.action = "delete";
   ctx.scene.state.table = ctx.match[1];
   ctx.scene.state.selected_item = ctx.match[2];
@@ -284,6 +295,8 @@ scene.action(/^delete\-(category|item|subcategory)\-([0-9]+)$/g, (ctx) => {
 });
 
 scene.action(/^edit\-(category|subcategory)\-([0-9]+)$/g, (ctx) => {
+  ctx.answerCbQuery().catch(console.log);
+
   ctx.scene.state.action = "edit";
   ctx.scene.state.table = ctx.match[1];
   ctx.scene.state.selected_item = ctx.match[2];
@@ -324,14 +337,13 @@ scene.action(/^edit\-(item)\-(.+)$/g, (ctx) => {
     adding_price,
   };
 
-  console.log(ctx.scene.state.input, ctx.scene.state.item);
-
   ctx.replyWithKeyboard(getUpdateHeader(ctx), "finish_updating_keyboard");
   ctx.wizard.selectStep(9);
 });
 
 scene.action(/^add\-(category|item|subcategory)\-([0-9]+)$/g, (ctx) => {
-  console.log(222);
+  ctx.answerCbQuery().catch(console.log);
+
   ctx.scene.state.action = "add";
   ctx.scene.state.table = ctx.match[1];
   ctx.scene.state.reference_id = ctx.match[2];
@@ -430,7 +442,7 @@ async function confirmAction(ctx) {
 
             const id = (
               await addAction(
-                `insert into items (name, subcategory_id, vendor_code, price, photo, description) values ($1,$2,$3,$4,$5,$6) returning id`,
+                `insert into items (name, subcategory_id, vendor_code, price, photo, description, sizes) values ($1,$2,$3,$4,$5,$6,$7) returning id`,
                 [
                   adding_name,
                   reference_id,
@@ -438,6 +450,7 @@ async function confirmAction(ctx) {
                   adding_price,
                   photos?.[0],
                   adding_description,
+                  adding_sizes,
                 ]
               )
             )?.[0]?.id;
@@ -539,13 +552,15 @@ async function confirmAction(ctx) {
   delete ctx.scene.state.action,
     ctx.scene.state.table,
     ctx.scene.state.selected_item,
-    ctx.scene.state.input,
-    ctx.scene.state.reference_id,
-    ctx.scene.state.categories,
-    ctx.scene.state.subcategories,
-    ctx.scene.state.items;
+    ctx.scene.state.input;
 
-  ctx.scene.enter("categoriesScene");
+  ctx.scene.reenter("categoriesScene", {
+    edit: true,
+    subcategory_id: ctx.scene.state.subcategory_id,
+    category_id: ctx.scene.state.category_id,
+    subcategories: ctx.scene.state.subcategories,
+    category_name: ctx.scene.state.category_name,
+  });
 }
 
 scene.action("confirm", async (ctx) => {
@@ -665,10 +680,15 @@ scene.action(/^item\-([0-9]+)$/g, async (ctx) => {
 scene.action("back", async (ctx) => {
   ctx.answerCbQuery().catch(console.log);
 
-  if (ctx.scene.state.subcategory_id) {
-    delete ctx.scene.state.subcategory_id,
-      ctx.scene.state.items,
-      ctx.scene.state.subcategory_name;
+  if (ctx.scene.state.item) {
+    ctx.scene.enter("categoriesScene", {
+      edit: true,
+      subcategory_id: ctx.scene.state.subcategory_id,
+      category_id: ctx.scene.state.category_id,
+      subcategories: ctx.scene.state.subcategories,
+      category_name: ctx.scene.state.category_name,
+    });
+  } else if (ctx.scene.state.subcategory_id) {
     ctx.scene.enter("categoriesScene", {
       edit: true,
       category_id: ctx.scene.state.category_id,

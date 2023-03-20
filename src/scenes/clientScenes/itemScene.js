@@ -26,8 +26,9 @@ scene.enter(async (ctx) => {
     subcategory_id,
     m1,
     m2,
-    offset = 0,
   } = ctx.scene.state;
+
+  let { offset = 0 } = ctx.scene.state;
 
   const connection = await tOrmCon;
 
@@ -50,7 +51,10 @@ scene.enter(async (ctx) => {
 
   let osCalc = offset % ctx.scene.state.itemsCount;
 
-  osCalc = osCalc < 0 ? parseInt(itemsCount) - 1 : osCalc;
+  if (offset == -1) {
+    offset = osCalc = ctx.scene.state.itemsCount - 1;
+  }
+
   console.log("os", offset, itemsCount, osCalc);
 
   const item = (ctx.scene.state.item = (
@@ -105,15 +109,10 @@ scene.enter(async (ctx) => {
   //if (edit && !item.photo) return ctx.editMenu(title, keyboard);
 
   if (m1) {
-    await ctx.deleteMessage(m1).catch((e) => {
-      console.log(e);
-    });
+    await ctx.deleteMessage(m1).catch((e) => {});
   }
   if (m2) {
-    for (mm of m2)
-      await ctx.deleteMessage(mm).catch((e) => {
-        console.log(e);
-      });
+    for (mm of m2) await ctx.deleteMessage(mm).catch((e) => {});
   }
 
   let mp;
@@ -124,7 +123,7 @@ scene.enter(async (ctx) => {
         return { type: "photo", media: el };
       })
     )
-    .catch(console.log);
+    .catch(() => {});
 
   let m;
 
